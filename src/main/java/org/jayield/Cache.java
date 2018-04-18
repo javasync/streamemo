@@ -14,11 +14,12 @@ public class Cache {
 
     public static <T> Supplier<Stream<T>> of(Supplier<Stream<T>> dataSrc) {
         Spliterator<T> src = dataSrc.get().spliterator();
+        long size = src.estimateSize();
         Recorder<T> rec = new Recorder<>(src);
         return () -> {
             // CacheIterator starts on index 0 and reads data from src or
             // from an internal cache of Recorder.
-            CacheIterator<T> iter = new CacheIterator<>(rec, src.estimateSize(), src.characteristics());
+            CacheIterator<T> iter = new CacheIterator<>(rec, size, src.characteristics());
             return StreamSupport.stream(iter, false);
         };
     }
