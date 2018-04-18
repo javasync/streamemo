@@ -1,6 +1,7 @@
 package org.jayield;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -55,6 +56,9 @@ public class Cache {
         }
         public boolean tryAdvance(Consumer<? super T> cons) {
             return rec.getOrAdvance(index++, cons);
+        }
+        public Comparator<? super T> getComparator() {
+            return rec.src.getComparator();
         }
     }
 }
