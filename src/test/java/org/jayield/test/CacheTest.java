@@ -42,4 +42,24 @@ public class CacheTest {
                 expected.toArray(),
                 nrsReplay.get().limit(5).toArray());
     }
+
+
+    @Test
+    public void testHighlightDifferentAspects () {
+        boolean[] called = new boolean[10];
+        Supplier<Stream<Integer>> s = Cache.of(() -> IntStream
+                .range(0, 10)
+                .peek(n -> {
+                    if(called[n]) Assertions.fail("Already generated: " + n);
+                    called[n] = true;
+                })
+                .boxed());
+
+        s.get().findFirst();
+        s.get().toArray();
+        s.get()
+                .filter(i -> i<5)
+                .forEach(x -> {});
+        s.get().toArray();
+    }
 }
