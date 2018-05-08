@@ -12,8 +12,10 @@ plugins {
 }
 
 dependencies {
-    // Use JUnit test framework
     testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.1.0'
+    testImplementation 'org.slf4j:slf4j-jdk14:1.7.21'
+    testImplementation 'org.asynchttpclient:async-http-client:2.4.7'
+    testImplementation 'io.projectreactor:reactor-core:3.1.7.RELEASE'
 }
 
 // In this section you declare where to find the dependencies of your project
