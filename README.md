@@ -115,7 +115,7 @@ comments;
 in Celsius;
 5. convert it to integer.
 
-![weather-data-source](https://user-images.githubusercontent.com/578217/39763003-ea99b4a2-52d3-11e8-86ed-a6ffae325cab.jpg)
+<img alt="weather-data-source" src="https://user-images.githubusercontent.com/578217/39763003-ea99b4a2-52d3-11e8-86ed-a6ffae325cab.jpg" width="500">
 
 To make these transformations without waiting for
 response completion we will use the method `thenApply()`
@@ -163,6 +163,13 @@ public class Weather{
                 .mapToInt(Integer::parseInt));// Convert to Integer
     }
 ```
+
+## Approach 1 -- `Supplier<Stream<...>>`
+
+## Approach 2 -- Memoize to a collection
+
+## Approach 3 -- Memoize on-demand and replay 
+
 
 
   [1]: https://stackoverflow.com/questions/36255007/is-there-any-way-to-reuse-a-stream-in-java-8
