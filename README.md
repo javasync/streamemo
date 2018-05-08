@@ -48,10 +48,11 @@ So shortly, both options have drawbacks and none of
 them is best suited for all use cases. Here we will
 explore the limitations and advantages of each approach
 on data resulting from an HTTP request.
-We will incrementally combine these solutions: 1) using
-a `Supplier<Stream<…>>`, 2) memoizing the resulting stream
-into a collection to avoid multiple roundtrips to data
-source, and 3) memoizing and replaying items on demand
+We will incrementally combine these solutions:
+1. [using a `Supplier<Stream<…>>`](#approach-1----supplierstream)
+2. [memoizing the resulting stream into a collection](#approach-2----memoize-to-a-collection)
+to avoid multiple roundtrips to data source
+3. [memoizing and replaying items on demand](approach-3----memoize-on-demand-and-replay)
 into and from an internal buffer.
 
 ## Streams Use Case
