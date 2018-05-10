@@ -52,7 +52,7 @@ We will incrementally combine these solutions:
 1. [using a `Supplier<Stream<…>>`](#approach-1----supplierstream)
 2. [memoizing the resulting stream into a collection](#approach-2----memoize-to-a-collection)
 to avoid multiple roundtrips to data source
-3. [memoizing and replaying items on demand](approach-3----memoize-on-demand-and-replay)
+3. [memoizing and replaying items on demand](#approach-3----memoize-on-demand-and-replay)
 into and from an internal buffer.
 
 ## Streams Use Case
@@ -167,6 +167,96 @@ public class Weather{
 
 ## Approach 1 -- `Supplier<Stream<...>>`
 
+Given the method `getTemperaturesAsync()` we can get
+a sequence of temperatures at Lisbon in March as:
+
+```java
+CompletableFuture<IntStream> lisbonTempsInMarch = Weather
+                .getTemperaturesAsync(38.717, -9.133, of(2018,4,1), of(2018,4,30));
+```
+
+Now, whenever we want to perform a query we may get
+the resulting stream from the `CompletableFuture`.
+In the following example we are getting the value of
+the maximum temperature in March and counting how many
+days reached this temperature.
+
+```java
+int maxTemp = lisbonTempsInMarch.join().max();
+long nrDaysWithMaxTemp = lisbonTempsInMarch
+                             .join()
+                             .filter(maxTemp::equals)
+                             .count(); // Throws IllegalStateException 
+```
+
+However, the second query will throw an exception
+because the stream from `lisbonTempsInMarch.join()` has
+been already operated on first query.
+To avoid this exception we must get a fresh stream
+combining all intermediate operations to the data source.
+This means that we have to make a new HTTP request and
+all the transformations of the HTTP response.
+So we will use a `Supplier<CompletableFuture<Stream<T>>>`
+to wrap the request in a supplier as:
+
+```java
+Supplier<CompletableFuture<IntStream>> lisbonTempsInMarch = () -> Weather
+                .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30));
+```
+
+And now whenever we want to execute a new query we
+have to perform a new HTTP request through the
+`get()` method of the supplier ` lisbonTempsInMarch`,
+then get the resulting stream from the response through
+`join()` and finally invoke the stream operations as:
+
+```java
+int maxTemp = lisbonTempsInMarch.get().join().max();
+long nrDaysWithMaxTemp = lisbonTempsInMarch
+                             .get()
+                             .join()
+                             .filter(maxTemp::equals)
+                             .count();
+```
+
+To avoid the consecutive invocation of `get()` and
+`join()` we can put the call to `join()` method inside
+the supplier as:
+
+```java
+Supplier<CompletableFuture<IntStream>> lisbonTempsInMarch = () -> Weather
+                .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30))
+                .join();
+```
+
+And now we can simply write:
+
+```java
+int maxTemp = lisbonTempsInMarch.get().max();
+long nrDaysWithMaxTemp = lisbonTempsInMarch
+                             .get()
+                             .filter(maxTemp::equals)
+                             .count();
+```
+
+
+Briefly, according to this approach we are creating
+a new stream chain (with all the transformations
+specified in [`getTemperaturesAsync()`][9]) every time
+we want to consume that stream.
+This idea is based on a claim of the Java documentation
+about [Stream operations and pipelines][10] that states: 
+
+> if you need to traverse the same data source again,
+> you must return to the data source to get a new stream.
+
+However this technique forces the recreation of the
+whole pipeline to the data source which incurs in
+inevitable IO due to the HTTP request. 
+Since data from past weather information is immutable
+then this HTTP request is useless because we will
+always get the same sequence of temperatures. 
+
 ## Approach 2 -- Memoize to a collection
 
 ## Approach 3 -- Memoize on-demand and replay 
@@ -182,4 +272,4 @@ public class Weather{
   [7]: https://docs.oracle.com/javase/10/docs/api/java/util/concurrent/CompletableFuture.html
   [8]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/Weather.java
   [9]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/Weather.java#L47
-  
+  [10]: https://docs.oracle.com/javase/8/docs/api/java/util/stream/package-summary.html#StreamOps
