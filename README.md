@@ -55,6 +55,10 @@ to avoid multiple roundtrips to data source
 3. [memoizing and replaying items on demand](#approach-3----memoize-and-replay-on-demand)
 into and from an internal buffer.
 
+In order to understand all details of this article you
+must be familiarized with streams terminology which is
+briefly revisited in the last [appendix](#appendix----streams-revisited). 
+
 ## Streams Use Case
 
 `Stream` operations are very convenient to perform
@@ -583,7 +587,7 @@ in an intermediate collection.
 
 Reactive Streams implementations, such as [RxJava][14] or
 [Reactor][15], provide similar feature to that one
-proposed in [third approach](https://github.com/CCISEL/streams/tree/how_to_replay_java_streams#approach-3----memoize- and-replay- on-demand).
+proposed in [third approach](https://github.com/CCISEL/streams/tree/how_to_replay_java_streams#approach-3----memoize-and-replay- on-demand).
 Thus, if using `Stream` is not a requirement, then with
 reactor core we can simply convert the `Supplier<Stream<T>>`
 to a `Flux<T>`, which already provides the utility
@@ -614,6 +618,20 @@ also produce an asynchronous result in an instance of
 which can be followed up later through the `subscribe()`
 method.
 
+## Appendix -- Streams Revisited
+
+Here we present a set of essential notions about
+Java streams taken from the article [Java Streams][16]
+of Bryan Goets
+
+> All stream computations share a common structure: They have a _stream source_, zero or more _intermediate operations_, and a single _terminal operation_. The elements of a stream can be object references (`Stream<String>`) or they can be primitive integers (`IntStream`), longs (`LongStream`), or doubles (`DoubleStream`).
+
+> Constructing a stream source doesn't compute the elements of the stream, but instead captures how to find the elements when necessary. Similarly, invoking an intermediate operation doesn't perform any computation on the elements; it merely adds another operation to the end of the stream description. Only when the terminal operation is invoked does the pipeline actually perform the work — compute the elements, apply the intermediate operations, and apply the terminal operation.
+
+> Intermediate operations are always _lazy_: Invoking an intermediate operation merely sets up the next stage in the stream pipeline but doesn't initiate any work.
+
+> For sequential execution, Streams constructs a "machine" — a chain of `Consumer` objects whose structure matches that of the pipeline structure.
+
   [1]: https://stackoverflow.com/questions/36255007/is-there-any-way-to-reuse-a-stream-in-java-8
   [2]: https://stackoverflow.com/questions/23860533/copy-a-stream-to-avoid-stream-has-already-been-operated-upon-or-closed
   [3]: https://stackoverflow.com/questions/22918207/java-8-stream-illegalstateexception
@@ -629,3 +647,4 @@ method.
   [13]: https://github.com/CCISEL/streams/blob/master/src/main/java/org/streams/Replayer.java#L41
   [14]: https://github.com/ReactiveX/RxJava
   [15]: https://github.com/reactor/reactor-core
+  [16]: https://www.ibm.com/developerworks/java/library/j-java-streams-1-brian-goetz/
