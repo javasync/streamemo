@@ -490,7 +490,7 @@ dataSrc ----> srcIter ----> Recorder ----> MemoizeIter ----> stream
 ```
 
 In the following listing we present the implementation of
-[`replay()`][:13] utility method that creates a supplier
+[`replay()`][13] utility method that creates a supplier
 responsible for chaining the above stream pipeline:
 
 ```java
@@ -506,21 +506,13 @@ public static <T> Supplier<Stream<T>> replay(Supplier<Stream<T>> dataSrc) {
 
 static class Recorder<T> {
     final Supplier<Stream<T>> dataSrc;
-    Spliterator<T> srcIter;
-    long estimateSize;
+    Spliterator<T> srcIter = dataSrc.get().spliterator();
+    long estimateSize = srcIter.estimateSize();
     final List<T> mem = new ArrayList<>();
     boolean hasNext = true;
 
     public Recorder(Supplier<Stream<T>> dataSrc) {
         this.dataSrc= dataSrc;
-    }
-
-    Spliterator<T> getSrcIter() {
-        if(srcIter == null) {
-            this.srcIter = dataSrc.get().spliterator();
-            this.estimateSize = srcIter.estimateSize();
-        }
-        return srcIter;
     }
 
     public synchronized boolean getOrAdvance(int index, Consumer<? super T> cons) {
@@ -530,7 +522,7 @@ static class Recorder<T> {
             return true;
         } else if (hasNext)
             // If not in mem then advance the srcIter iterator
-            hasNext = getSrcIter().tryAdvance(item -> {
+            hasNext = srcIter.tryAdvance(item -> {
                 mem.add(item);
                 cons.accept(item);
             });
@@ -542,13 +534,13 @@ static class Recorder<T> {
     class MemoizeIter extends Spliterators.AbstractSpliterator<T>  {
         int index = 0;
         public MemoizeIter(){
-            super(estimateSize, getSrcIter().characteristics());
+            super(estimateSize, srcIter.characteristics());
         }
         public boolean tryAdvance(Consumer<? super T> cons) {
             return getOrAdvance(index++, cons);
         }
         public Comparator<? super T> getComparator() {
-            return getSrcIter().getComparator();
+            return srcIter.getComparator();
         }
     }
 }
@@ -587,13 +579,14 @@ match an item at the beginning of the stream `others`
 then  we do not need to store all items of `others`
 in an intermediate collection.
 
-Reactive Streams implementations, such as [RxJava][:14] or
-[Reactor][:15], provide similar feature to that one
-proposed in [third approach][https://github.com/CCISEL/streams/tree/how_to_replay_java_streams#approach-3----memoize- and-replay- on-demand].
-Thus, if using `Stream` is not a requirement, then we
-can simply convert the `Supplier<Stream<T>>` to a
-`Flux<T>` (i.e. the implementation of `Publisher<T>`
-in project reactor), which already provides the utility
+***
+
+Reactive Streams implementations, such as [RxJava][14] or
+[Reactor][15], provide similar feature to that one
+proposed in [third approach](https://github.com/CCISEL/streams/tree/how_to_replay_java_streams#approach-3----memoize- and-replay- on-demand).
+Thus, if using `Stream` is not a requirement, then with
+reactor core we can simply convert the `Supplier<Stream<T>>`
+to a `Flux<T>`, which already provides the utility
 `cache()` method and henceforward use `Flux<T>`
 operations rather than  `Stream<T>` operations.
 
@@ -603,15 +596,23 @@ of an HTTP request transformed in a sequence of temperatures
 in Celsius, then we can perform both queries in the
 following way with the `Flux` API:
 
+```java
 CompletableFuture<Stream<Integer>> lisbonTempsInMarch = Weather
-                .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30))
-                .thenApply(IntStream::boxed);
-        Flux<Integer> cache = Flux
-                .fromStream(lisbonTempsInMarch::join)
-                .cache();
-        Integer maxTemp = cache.reduce(Integer::max).block();
-        long nrDaysWithMaxTemp = cache.filter(maxTemp::equals).count().block();
+        .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30))
+        .thenApply(IntStream::boxed);
+Flux<Integer> cache = Flux
+        .fromStream(lisbonTempsInMarch::join)
+        .cache();
+cache.reduce(Integer::max).subscribe(maxTemp -> …);
+cache.filter(maxTemp::equals).count().subscribe(nrDaysWithMaxTemp  -> …);
+```
 
+Due to the asynchronous nature of `Flux` the result
+of a terminal operation such as `reduce()` or `count`
+also produce an asynchronous result in an instance of
+`Mono` (i.e. the reactor equivalent to `CompletableFuture`)
+which can be followed up later through the `subscribe()`
+method.
 
   [1]: https://stackoverflow.com/questions/36255007/is-there-any-way-to-reuse-a-stream-in-java-8
   [2]: https://stackoverflow.com/questions/23860533/copy-a-stream-to-avoid-stream-has-already-been-operated-upon-or-closed
