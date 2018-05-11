@@ -52,7 +52,7 @@ We will incrementally combine these solutions:
 1. [using a `Supplier<Stream<…>>`](#approach-1----supplierstream)
 2. [memoizing the resulting stream into a collection](#approach-2----memoize-to-a-collection)
 to avoid multiple roundtrips to data source
-3. [memoizing and replaying items on demand](#approach-3----memoize-on-demand-and-replay)
+3. [memoizing and replaying items on demand](#approach-3----memoize-and-replay-on-demand)
 into and from an internal buffer.
 
 ## Streams Use Case
@@ -191,7 +191,7 @@ long nrDaysWithMaxTemp = lisbonTempsInMarch
 
 However, the second query will throw an exception
 because the stream from `lisbonTempsInMarch.join()` has
-been already operated on first query.
+already been operated on first query.
 To avoid this exception we must get a fresh stream
 combining all intermediate operations to the data source.
 This means that we have to make a new HTTP request and
@@ -357,13 +357,13 @@ So, instead of executing just 2 traversals to compute
 of the maximum value; we are performing one more traversal
 first that is not used in none of the end queries.
 
-## Approach 3 -- Memoize on-demand and replay 
+## Approach 3 -- Memoize and replay on-demand  
 
 Now we propose a third approach where we memoize items
 only when they are accessed by a traversal.
 Later an item may be retrieved from: 1) the `mem` or
-2) the data source, depending on whether it has been
-already requested by a previous operation, or not.
+2) the data source, depending on whether it has already
+been requested by a previous operation, or not.
 These two streams are expressed by the following
 stream concatenation: 
 
@@ -382,8 +382,8 @@ The `srcIter` is an instance of an iterator (`MemoizeIter`)
 that retrieves items from the data source and add
 them to `mem`.
 Considering that `src` is the data source then the
-definition of [`MemoizeIter`][11] is in the following
-implementation of the [`memoize()`][12] method:
+definition of [`MemoizeIter`][11] is according to the
+following implementation of the [`memoize()`][12] method:
 
 ```java
 public static <T> Supplier<Stream<T>> memoize(Stream<T> src) {
@@ -456,10 +456,10 @@ So when we get an item of `iter2` we get a
 ```java
 Supplier<Stream<Integer>> nrs = memoize(IntStream.range(1, 10).boxed());
 Spliterator<Integer> iter1 = nrs.get().spliterator();
-iter1.tryAdvance(out::println);
-iter1.tryAdvance(out::println);
+iter1.tryAdvance(out::println); // > 1
+iter1.tryAdvance(out::println); // > 2
 Spliterator<Integer> iter2 = nrs.get().spliterator();
-iter1.tryAdvance(out::println);
+iter1.tryAdvance(out::println); // > 3
 iter2.forEachRemaining(out::print); // throws ConcurrentModificationException
 System.out.println(); 
 ```
@@ -565,6 +565,52 @@ from the source iterator.
 This implementation solves the requirement of
 concurrent iterations on the same data source.
 
+## Conclusion 
+
+Reusing a stream is a realistic need which should
+not only be circumscribed to 1) redo the computation
+to the data source, or 2) collect the intermediate
+result.
+For example, a lazy intersection operation requires
+multiple traversals of the same stream, but it is
+not mandatory that the second stream be fully traversed. 
+
+```java
+nrs.filter(n -> others.anyMatch(n::equals))
+```
+
+Although, we need to traverse `others` multiple times,
+there are some cases where we do not need to traverse it
+to the end. 
+Considering that all items from stream `nrs` always
+match an item at the beginning of the stream `others`
+then  we do not need to store all items of `others`
+in an intermediate collection.
+
+Reactive Streams implementations, such as [RxJava][:14] or
+[Reactor][:15], provide similar feature to that one
+proposed in [third approach][https://github.com/CCISEL/streams/tree/how_to_replay_java_streams#approach-3----memoize- and-replay- on-demand].
+Thus, if using `Stream` is not a requirement, then we
+can simply convert the `Supplier<Stream<T>>` to a
+`Flux<T>` (i.e. the implementation of `Publisher<T>`
+in project reactor), which already provides the utility
+`cache()` method and henceforward use `Flux<T>`
+operations rather than  `Stream<T>` operations.
+
+Regarding our use case, where `lisbonTempsInMarch` is
+a `CompletableFuture<Stream<Integer>>` with the result
+of an HTTP request transformed in a sequence of temperatures
+in Celsius, then we can perform both queries in the
+following way with the `Flux` API:
+
+CompletableFuture<Stream<Integer>> lisbonTempsInMarch = Weather
+                .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30))
+                .thenApply(IntStream::boxed);
+        Flux<Integer> cache = Flux
+                .fromStream(lisbonTempsInMarch::join)
+                .cache();
+        Integer maxTemp = cache.reduce(Integer::max).block();
+        long nrDaysWithMaxTemp = cache.filter(maxTemp::equals).count().block();
 
 
   [1]: https://stackoverflow.com/questions/36255007/is-there-any-way-to-reuse-a-stream-in-java-8
@@ -578,5 +624,7 @@ concurrent iterations on the same data source.
   [9]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/Weather.java#L47
   [10]: https://docs.oracle.com/javase/8/docs/api/java/util/stream/package-summary.html#StreamOps
   [11]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/MemoizeTest.java#L60
-  [12]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/MemoizeTest.java
+  [12]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/MemoizeTest.java#L57
   [13]: https://github.com/CCISEL/streams/blob/master/src/main/java/org/streams/Replayer.java#L41
+  [14]: https://github.com/ReactiveX/RxJava
+  [15]: https://github.com/reactor/reactor-core
