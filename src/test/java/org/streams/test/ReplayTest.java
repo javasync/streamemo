@@ -24,7 +24,7 @@
 
 package org.streams.test;
 
-import org.streams.Memoize;
+import org.streams.Replayer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -41,7 +41,7 @@ import static java.lang.System.out;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Stream.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.streams.Memoize.replay;
+import static org.streams.Replayer.replay;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ReplayTest {
@@ -67,7 +67,7 @@ public class ReplayTest {
         IntStream.range(1, 6).forEach(size -> out.println(nrs.get().limit(size).collect(joining(","))));
 
         out.println();
-        Supplier<Stream<String>> nrsReplay = Memoize.replay(nrs);
+        Supplier<Stream<String>> nrsReplay = Replayer.replay(nrs);
         IntStream.range(1, 6).forEach(size -> out.println(nrsReplay.get().limit(size).collect(joining(","))));
     }
 
@@ -75,7 +75,7 @@ public class ReplayTest {
     public void testInfiniteRandomStream() {
         Random rnd = new Random();
         // Supplier<Stream<Integer>> nrs = () -> generate(() -> rnd.nextInt(99));
-        Supplier<Stream<Integer>> nrs = Memoize.replay(() -> generate(() -> rnd.nextInt(99)));
+        Supplier<Stream<Integer>> nrs = Replayer.replay(() -> generate(() -> rnd.nextInt(99)));
         List<Integer> expected = new ArrayList<>();
         IntStream.range(1, 6).forEach(size -> nrs
                 .get()
@@ -91,7 +91,7 @@ public class ReplayTest {
     @Test
     public void testHighlightDifferentAspects() {
         boolean[] called = new boolean[10];
-        Supplier<Stream<Integer>> s = Memoize.replay(() -> IntStream
+        Supplier<Stream<Integer>> s = Replayer.replay(() -> IntStream
                 .range(0, 10)
                 .peek(n -> {
                     if (called[n]) Assertions.fail("Already generated: " + n);

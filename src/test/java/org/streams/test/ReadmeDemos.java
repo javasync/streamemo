@@ -24,6 +24,7 @@
 
 package org.streams.test;
 
+import org.asynchttpclient.Response;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 
@@ -32,12 +33,14 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static java.lang.System.out;
 import static java.time.LocalDate.of;
 import static java.util.stream.Collectors.toList;
+import static org.asynchttpclient.Dsl.asyncHttpClient;
 
 
 public class ReadmeDemos {
@@ -55,13 +58,13 @@ public class ReadmeDemos {
                 .thenApply(strm -> strm.boxed().collect(toList()));
         out.println("Nrs wraped in a CF and transformed in CF<List<Integer>>!");
 
-        Supplier<Stream<Integer>> cache = () -> mem
+        Supplier<Stream<Integer>> nrsSource = () -> mem
                 .join()
                 .stream();
 
-        Integer max = cache.get().reduce(Integer::max).get();
+        Integer max = nrsSource.get().max(Integer::compare).get();
         out.println("Nrs traversed to get max = " + max);
-        long maxOccurrences = cache.get().filter(max::equals).count();
+        long maxOccurrences = nrsSource.get().filter(max::equals).count();
         out.println("Nrs traversed to count max occurrences = " + maxOccurrences);
     }
 
@@ -75,7 +78,7 @@ public class ReadmeDemos {
                 .join()
                 .stream();
 
-        Integer maxTemp = lisbonTempsInMarch.get().reduce(Integer::max).get();
+        Integer maxTemp = lisbonTempsInMarch.get().max(Integer::compare).get();
         long nrDaysWithMaxTemp = lisbonTempsInMarch.get().filter(maxTemp::equals).count();
 
         out.println(maxTemp);
@@ -97,16 +100,42 @@ public class ReadmeDemos {
     @Test
     public void testMemoizeReplayWithReactorFlux() throws InterruptedException {
 
-        CompletableFuture<Stream<Integer>> temps = Weather
+        CompletableFuture<Stream<Integer>> lisbonTempsInMarch = Weather
                 .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30))
                 .thenApply(IntStream::boxed);
         Flux<Integer> cache = Flux
-                .fromStream(temps::join)
+                .fromStream(lisbonTempsInMarch::join)
                 .cache();
         out.println("HTTP request sent");
         Thread.currentThread().sleep(2000);
         out.println("Wake up");
-        cache.distinct().count().subscribe(out::println);
-        cache.reduce(Integer::max).subscribe(out::println);
+        Integer maxTemp = cache.reduce(Integer::max).block();
+        long nrDaysWithMaxTemp = cache.filter(maxTemp::equals).count().block();
+        out.println(maxTemp);
+        out.println(nrDaysWithMaxTemp);
+    }
+
+    @Test
+    public void firstExample() throws IOException, InterruptedException {
+        Pattern pat = Pattern.compile("\\n");
+        CompletableFuture<Stream<String>> csv = asyncHttpClient()
+                .prepareGet("http://api.worldweatheronline.com/premium/v1/past-weather.ashx?q=37.017,-7.933&date=2018-04-01&enddate=2018-04-30&tp=24&format=csv&key=54a4f43fc39c435fa2c143536183004")
+                .execute()
+                .toCompletableFuture()
+                .thenApply(Response::getResponseBody)
+                .thenApply(pat::splitAsStream);
+
+        boolean [] isEven = {true};
+        Pattern comma = Pattern.compile(",");
+        CompletableFuture<IntStream> temps = csv.thenApply(str -> str
+                .filter(w -> !w.startsWith("#")) // Filter comments
+                .skip(1)                         // Skip line: Not Available
+                .filter(l -> isEven[0] = !isEven[0]) // Filter Even line
+                .map(line -> comma.splitAsStream(line).skip(2).findFirst().get()) // Extract temperature in Celsius
+                .mapToInt(Integer::parseInt));
+
+        temps
+                .thenAccept(ts -> ts.forEach(t -> System.out.print(t + ",")))
+                .join();
     }
 }

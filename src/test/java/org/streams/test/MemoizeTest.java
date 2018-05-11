@@ -46,8 +46,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class MemoizeTest {
 
     /**
-     * Creates a new stream supplier which caches items when they are traverssed.
-     * The stream cretaed by the supplier retrieves items from: 1) the cache or
+     * Creates a new stream supplier which memoizes items when they are traversed.
+     * The stream created by the supplier retrieves items from: 1) the mem or
      * 2) the data source, depending on whether it has been already requested
      * by a previous operation, or not.
      * @param src
@@ -55,22 +55,22 @@ public class MemoizeTest {
      * @return
      */
     public static <T> Supplier<Stream<T>> memoize(Stream<T> src) {
-        final Spliterator<T> srcIter = src.spliterator();
-        final ArrayList<T> cache = new ArrayList<>();
+        final Spliterator<T> iter = src.spliterator();
+        final ArrayList<T> mem = new ArrayList<>();
         class MemoizeIter extends Spliterators.AbstractSpliterator<T> {
-            MemoizeIter() { super(srcIter.estimateSize(), srcIter.characteristics()); }
+            MemoizeIter() { super(iter.estimateSize(), iter.characteristics()); }
             public boolean tryAdvance(Consumer<? super T> action) {
-                return srcIter.tryAdvance(item -> {
-                    cache.add(item);
+                return iter.tryAdvance(item -> {
+                    mem.add(item);
                     action.accept(item);
                 });
             }
             public Comparator<? super T> getComparator() {
-                return srcIter.getComparator();
+                return iter.getComparator();
             }
         }
-        MemoizeIter memSrcIter = new MemoizeIter();
-        return () -> concat(cache.stream(), stream(memSrcIter, false));
+        MemoizeIter srcIter = new MemoizeIter();
+        return () -> concat(mem.stream(), stream(srcIter, false));
     }
 
     /**
@@ -104,7 +104,7 @@ public class MemoizeTest {
         Supplier<Stream<Integer>> mem = memoize(nrs.boxed());
         out.println("Nrs wrapped in a memoizable Supplier ");
 
-        Integer max = mem.get().reduce(Integer::max).get();
+        Integer max = mem.get().max(Integer::compareTo).get();
         out.println("Nrs traversed to get max = " + max);
         long maxOccurrences = mem.get().filter(max::equals).count();
         out.println("Nrs traversed to count max occurrences = " + maxOccurrences);

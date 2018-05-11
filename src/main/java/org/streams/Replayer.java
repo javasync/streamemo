@@ -36,7 +36,7 @@ import java.util.stream.Stream;
 
 import static java.util.stream.StreamSupport.stream;
 
-public class Memoize {
+public class Replayer {
 
     public static <T> Supplier<Stream<T>> replay(Stream<T> data) {
         return replay(() -> data);
@@ -63,7 +63,7 @@ public class Memoize {
             this.dataSrc= dataSrc;
         }
 
-        Spliterator<T> getSrcIter() {
+        synchronized Spliterator<T> getSrcIter() {
             if(srcIter == null) {
                 srcIter = dataSrc.get().spliterator();
                 estimateSize = srcIter.estimateSize();
