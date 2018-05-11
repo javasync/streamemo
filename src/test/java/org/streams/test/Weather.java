@@ -55,6 +55,7 @@ public class Weather{
                 .prepareGet(String.format(PATH, lat, log, from, to, KEY))
                 .execute()
                 .toCompletableFuture()
+                .thenApply(Weather::checkResponseStatus)
                 .thenApply(Response::getResponseBody)
                 .thenApply(NEWLINE::splitAsStream);
         boolean[] isEven = {true};
@@ -68,6 +69,14 @@ public class Weather{
             close(asyncHttpClient);
             return __;
         });
+    }
+
+    private static Response checkResponseStatus(Response resp) {
+        if(resp.getStatusCode() != 200)
+            throw new IllegalStateException(String.format(
+                "%s: %s -- %s", resp.getStatusCode(), resp.getStatusText(), resp.getResponseBody()
+        ));
+        return resp;
     }
 
     private static void close(AsyncHttpClient asyncHttpClient) {

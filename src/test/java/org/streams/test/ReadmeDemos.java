@@ -58,13 +58,13 @@ public class ReadmeDemos {
                 .thenApply(strm -> strm.boxed().collect(toList()));
         out.println("Nrs wraped in a CF and transformed in CF<List<Integer>>!");
 
-        Supplier<Stream<Integer>> cache = () -> mem
+        Supplier<Stream<Integer>> nrsSource = () -> mem
                 .join()
                 .stream();
 
-        Integer max = cache.get().reduce(Integer::max).get();
+        Integer max = nrsSource.get().max(Integer::compare).get();
         out.println("Nrs traversed to get max = " + max);
-        long maxOccurrences = cache.get().filter(max::equals).count();
+        long maxOccurrences = nrsSource.get().filter(max::equals).count();
         out.println("Nrs traversed to count max occurrences = " + maxOccurrences);
     }
 
@@ -78,7 +78,7 @@ public class ReadmeDemos {
                 .join()
                 .stream();
 
-        Integer maxTemp = lisbonTempsInMarch.get().reduce(Integer::max).get();
+        Integer maxTemp = lisbonTempsInMarch.get().max(Integer::compare).get();
         long nrDaysWithMaxTemp = lisbonTempsInMarch.get().filter(maxTemp::equals).count();
 
         out.println(maxTemp);
@@ -100,17 +100,19 @@ public class ReadmeDemos {
     @Test
     public void testMemoizeReplayWithReactorFlux() throws InterruptedException {
 
-        CompletableFuture<Stream<Integer>> temps = Weather
+        CompletableFuture<Stream<Integer>> lisbonTempsInMarch = Weather
                 .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30))
                 .thenApply(IntStream::boxed);
         Flux<Integer> cache = Flux
-                .fromStream(temps::join)
+                .fromStream(lisbonTempsInMarch::join)
                 .cache();
         out.println("HTTP request sent");
         Thread.currentThread().sleep(2000);
         out.println("Wake up");
-        cache.distinct().count().subscribe(out::println);
-        cache.reduce(Integer::max).subscribe(out::println);
+        Integer maxTemp = cache.reduce(Integer::max).block();
+        long nrDaysWithMaxTemp = cache.filter(maxTemp::equals).count().block();
+        out.println(maxTemp);
+        out.println(nrDaysWithMaxTemp);
     }
 
     @Test
