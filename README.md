@@ -177,7 +177,7 @@ CompletableFuture<IntStream> lisbonTempsInMarch = Weather
 
 Now, whenever we want to perform a query we may get
 the resulting stream from the `CompletableFuture`.
-In the following example we are getting the value of
+In the following example we are getting
 the maximum temperature in March and counting how many
 days reached this temperature.
 
@@ -195,9 +195,10 @@ been already operated on first query.
 To avoid this exception we must get a fresh stream
 combining all intermediate operations to the data source.
 This means that we have to make a new HTTP request and
-all the transformations of the HTTP response.
-So we will use a `Supplier<CompletableFuture<Stream<T>>>`
-to wrap the request in a supplier as:
+repeat all the transformations over the HTTP response.
+To that end, we will use a `Supplier<CompletableFuture<Stream<T>>>`
+that wraps the request and subsequent transformations into
+a supplier:
 
 ```java
 Supplier<CompletableFuture<IntStream>> lisbonTempsInMarch = () -> Weather
@@ -205,10 +206,10 @@ Supplier<CompletableFuture<IntStream>> lisbonTempsInMarch = () -> Weather
 ```
 
 And now whenever we want to execute a new query we
-have to perform a new HTTP request through the
+can perform a new HTTP request through the
 `get()` method of the supplier ` lisbonTempsInMarch`,
 then get the resulting stream from the response through
-`join()` and finally invoke the stream operations as:
+`join()` and finally invoke the desired stream operations as:
 
 ```java
 int maxTemp = lisbonTempsInMarch.get().join().max();
@@ -258,6 +259,104 @@ then this HTTP request is useless because we will
 always get the same sequence of temperatures. 
 
 ## Approach 2 -- Memoize to a collection
+
+To avoid useless accesses to the data source we may
+first dump the stream elements into an auxiliary
+collection (e.g. `List<T> list =
+data.collect(Collectors.toList())`) and then get a
+new `Stream` from the resulting collection whenever
+we want to operate that sequence (e.g.
+`list.stream().filter(…).map(…)….`).
+
+Using this technique we can transform the resulting
+promise from the `getTemperaturesAsync()` into a new
+promise of a list of integers (i.e.
+`CompletableFuture<List<Integer>>`).
+Thus, when we get the HTTP response and after it is
+transformed into an `IntStream`, then it will proceed
+to be collected into a `List<Integer>`:
+
+```java
+CompletableFuture<List<Integer>> mem = Weather
+                .getTemperaturesAsync(38.717, -9.133, of(2018, 4, 1), of(2018, 4, 30))
+                .thenApply(strm -> strm.boxed().collect(toList()));
+```
+
+With this `CompletableFuture<List<Integer>>` we can
+build a `Supplier<Stream<Integer>>` that returns a
+new stream from the list contained in the `CompletableFuture`.
+
+```java
+Supplier<Stream<Integer>> lisbonTempsInMarch = () -> mem.join().stream();
+```
+
+Now, when we ask for a new stream to `lisbonTempsInMarch`,
+instead of chaining a stream pipeline to the data source
+(approach 1) we will get a fresh stream from the auxiliary
+list contained in `mem` that collected the intermediate
+sequence of temperatures.
+
+```java
+Integer maxTemp = lisbonTempsInMarch.get().max(Integer::compare).get();
+long nrDaysWithMaxTemp = lisbonTempsInMarch.get().filter(maxTemp::equals).count();
+```
+
+Yet, this approach incurs in an additional traversal to
+first collect the stream items. 
+We are wasting one first traversal which is not used to
+operate the stream elements (i.e. `strm.boxed().collect(toList())`)
+and then we incur in a second traversal to query that
+sequence (i.e. `lisbonTempsInMarch.get().max(Integer::compare).get()`).
+If we are only going to use the data once then we get
+a huge efficiency payback, because we did not have to
+store it in memory.
+Moreover, we are also wasting powerful "_loop fusion_"
+optimizations offered by stream, which let data flow
+through the whole pipeline efficiently from the data
+source to the terminal operation.
+
+To highlight the additional traversal that first occurs
+on collect consider the following example where we
+replace the `getTemperaturesAsync()` with a random
+stream of integers:
+
+```java
+IntStream nrs = new Random()
+        .ints(0, 7)
+        .peek(n -> out.printf("%d, ", n))
+        .limit(10);
+out.println("Stream nrs created!");
+
+CompletableFuture<List<Integer>> mem = CompletableFuture
+        .completedFuture(nrs)
+        .thenApply(strm -> strm.boxed().collect(toList()));
+out.println("Nrs wraped in a CF and transformed in CF<List<Integer>>!");
+
+Supplier<Stream<Integer>> nrsSource = () -> mem.join().stream();
+
+Integer max = nrsSource.get().reduce(Integer::max).get();
+out.println("Nrs traversed to get max = " + max);
+long maxOccurrences = nrsSource.get().filter(max::equals).count();
+out.println("Nrs traversed to count max occurrences = " + maxOccurrences);
+```
+
+The following output results from the execution of the previous code:
+
+> Stream nrs created!
+> 1, 0, 4, 6, 0, 6, 6, 3, 1, 2, Nrs wraped in a CF and transformed in CF<List<Integer>>!
+> Nrs traversed to get max = 6
+> Nrs traversed to count occurrences of max = 3
+
+Note, when the resulting stream (i.e. `nrsSource.get()`)
+is traversed by the `max()` operation, the stream from
+data source `nrs` has already been computed by the
+`collect()` operation resulting in the output:
+`1, 0, 4, 6, 0, 6, 6, 3, 1, 2,`.
+So, instead of executing just 2 traversals to compute
+2 queries: the maximum value and the number of occurrences
+of the maximum value; we are performing one more traversal
+first that is not used in none of the end queries.
+
 
 ## Approach 3 -- Memoize on-demand and replay 
 
