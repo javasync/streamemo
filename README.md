@@ -334,7 +334,7 @@ out.println("Nrs wraped in a CF and transformed in CF<List<Integer>>!");
 
 Supplier<Stream<Integer>> nrsSource = () -> mem.join().stream();
 
-Integer max = nrsSource.get().reduce(Integer::max).get();
+Integer max = nrsSource.get().max(Integer::compare).get();
 out.println("Nrs traversed to get max = " + max);
 long maxOccurrences = nrsSource.get().filter(max::equals).count();
 out.println("Nrs traversed to count max occurrences = " + maxOccurrences);
@@ -342,10 +342,10 @@ out.println("Nrs traversed to count max occurrences = " + maxOccurrences);
 
 The following output results from the execution of the previous code:
 
-> Stream nrs created!
-> 1, 0, 4, 6, 0, 6, 6, 3, 1, 2, Nrs wraped in a CF and transformed in CF<List<Integer>>!
-> Nrs traversed to get max = 6
-> Nrs traversed to count occurrences of max = 3
+> Stream nrs created!  
+> 1, 0, 4, 6, 0, 6, 6, 3, 1, 2, Nrs wraped in a CF and transformed in CF<List<Integer>>!  
+> Nrs traversed to get max = 6  
+> Nrs traversed to count occurrences of max = 3  
 
 Note, when the resulting stream (i.e. `nrsSource.get()`)
 is traversed by the `max()` operation, the stream from
@@ -357,8 +357,213 @@ So, instead of executing just 2 traversals to compute
 of the maximum value; we are performing one more traversal
 first that is not used in none of the end queries.
 
-
 ## Approach 3 -- Memoize on-demand and replay 
+
+Now we propose a third approach where we memoize items
+only when they are accessed by a traversal.
+Later an item may be retrieved from: 1) the `mem` or
+2) the data source, depending on whether it has been
+already requested by a previous operation, or not.
+These two streams are expressed by the following
+stream concatenation: 
+
+```
+() -> Stream.concat(mem.stream(), StreamSupport.stream(srcIter, false))
+```
+
+This supplier produces a new stream resulting from the
+concatenation of two other streams: one from the `mem`
+(i.e. `mem.stream()`) and other from the data source
+(i.e. `stream(srcIter, false)`).
+When the stream from `mem` is empty or an operation
+finishes traversing it, then it will proceed in the
+second stream built from the `srcIter`.
+The `srcIter` is an instance of an iterator (`MemoizeIter`)
+that retrieves items from the data source and add
+them to `mem`.
+Considering that `src` is the data source then the
+definition of [`MemoizeIter`][11] is in the following
+implementation of the [`memoize()`][12] method:
+
+```java
+public static <T> Supplier<Stream<T>> memoize(Stream<T> src) {
+    final Spliterator<T> iter = src.spliterator();
+    final ArrayList<T> mem = new ArrayList<>();
+    class MemoizeIter extends Spliterators.AbstractSpliterator<T> {
+        MemoizeIter() { super(iter.estimateSize(), iter.characteristics()); }
+        public boolean tryAdvance(Consumer<? super T> action) {
+            return iter.tryAdvance(item -> {
+                mem.add(item);
+                action.accept(item);
+            });
+        }
+    }
+    MemoizeIter srcIter = new MemoizeIter();
+    return () -> concat(mem.stream(), stream(srcIter, false));
+}
+```
+
+We could also build a stream from an iterator
+implementing the `Iterator` interface, but that is
+not the iteration approach followed  by `Stream`,
+which would require a conversion of that iterator to
+a `Spliterator`. 
+For that reason, we implement `MemoizeIter` with the
+`Spliterator` interface to avoid further indirections.
+Since ` Spliterator` requires the implementation of
+several abstract methods related with partition
+capabilities for parallel processing, we choose to
+extend `AbstractSpliterator` instead, which permit
+limited parallelism and need only implement a
+single method.
+The method `tryAdvance(action)` is the core iteration
+method, which performs the given `action` for each
+remaining element sequentially until all elements have
+been processed.
+So, on each iteration it adds the current `item` to
+the internal `mem` and retrieves that item to the
+consumer `action`:
+
+```java
+item -> { 
+        mem.add(item);
+        action.accept(item);
+}
+```
+
+Yet, this solution does not allow concurrent
+iterations on a stream resulting from the
+concatenation, while the source has not been
+entirely consumed. 
+When the stream from the source accesses a
+new item and adds it to the `mem` list it will
+invalidate any iterator in progress on this list.
+Consider the following example where we get two
+iterators from a stream of integers memoized with
+the `memoize()` method.
+We get two items (i.e. `1` and `2`) from the first
+stream (`iter1`) and then we get a second stream
+(`iter2`) which is composed by one stream with the
+previous two items (i.e. `1` and `2`) and other
+stream from the source. 
+After that we get the third item from the first
+stream (`iter1`) which is added to the internal
+`mem` and thus invalidates the internal stream of
+`iter2`.
+So when we get an item of `iter2` we get a
+`ConcurrentModificationException`.
+
+```java
+Supplier<Stream<Integer>> nrs = memoize(IntStream.range(1, 10).boxed());
+Spliterator<Integer> iter1 = nrs.get().spliterator();
+iter1.tryAdvance(out::println);
+iter1.tryAdvance(out::println);
+Spliterator<Integer> iter2 = nrs.get().spliterator();
+iter1.tryAdvance(out::println);
+iter2.forEachRemaining(out::print); // throws ConcurrentModificationException
+System.out.println(); 
+```
+
+To avoid this scenario and allow concurrent iterations,
+instead of the `concat()` we will use an alternative
+solution where the supplier resulting from `memoize()`
+always return a new `Spliterator` based stream which
+accesses items from `mem` or from data source. 
+It takes the decision on whether to read `mem` or data
+source on-demand when the `tryAdvance()` is invoked.
+To that end our solution compromises two entities:
+`Recorder` and `MemoizeIter`.
+The `Recorder` reads items from source iterator (i.e.
+`srcIter`); store them in internal buffer (i.e. `mem`) and
+pass them to a consumer. 
+The `MemoizeIter` is a random access iterator that gets
+items from the `Recorder`, which in turn gets those items
+from the internal buffer (i.e. `mem`) or from the source
+(i.e. `srcIter`). 
+The resulting stream pipeline creates a chain of:
+
+```
+dataSrc ----> srcIter ----> Recorder ----> MemoizeIter ----> stream
+                              ^
+                              |
+                 mem <--------|
+```
+
+In the following listing we present the implementation of
+[`replay()`][:13] utility method that creates a supplier
+responsible for chaining the above stream pipeline:
+
+```java
+public static <T> Supplier<Stream<T>> replay(Supplier<Stream<T>> dataSrc) {
+    final Recorder<T> rec = new Recorder<>(dataSrc);
+    return () -> {
+        // MemoizeIter starts on index 0 and reads data from srcIter or
+        // from an internal mem replay Recorder.
+        Spliterator<T> iter = rec.memIterator();
+        return stream(iter, false);
+    };
+}
+
+static class Recorder<T> {
+    final Supplier<Stream<T>> dataSrc;
+    Spliterator<T> srcIter;
+    long estimateSize;
+    final List<T> mem = new ArrayList<>();
+    boolean hasNext = true;
+
+    public Recorder(Supplier<Stream<T>> dataSrc) {
+        this.dataSrc= dataSrc;
+    }
+
+    Spliterator<T> getSrcIter() {
+        if(srcIter == null) {
+            this.srcIter = dataSrc.get().spliterator();
+            this.estimateSize = srcIter.estimateSize();
+        }
+        return srcIter;
+    }
+
+    public synchronized boolean getOrAdvance(int index, Consumer<? super T> cons) {
+        if (index < mem.size()) {
+            // If it is in mem then just get if from the corresponding index.
+            cons.accept(mem.get(index));
+            return true;
+        } else if (hasNext)
+            // If not in mem then advance the srcIter iterator
+            hasNext = getSrcIter().tryAdvance(item -> {
+                mem.add(item);
+                cons.accept(item);
+            });
+        return hasNext;
+    }
+
+    public Spliterator<T> memIterator() { return new MemoizeIter(); }
+
+    class MemoizeIter extends Spliterators.AbstractSpliterator<T>  {
+        int index = 0;
+        public MemoizeIter(){
+            super(estimateSize, getSrcIter().characteristics());
+        }
+        public boolean tryAdvance(Consumer<? super T> cons) {
+            return getOrAdvance(index++, cons);
+        }
+        public Comparator<? super T> getComparator() {
+            return getSrcIter().getComparator();
+        }
+    }
+}
+```
+
+For each data source we have a single instance
+of `Recorder` and one instance of `MemoizeIter`
+per stream created by the supplier.
+Since, the `getOrAdvance()`of  Recorder may be
+invoked by different instances of `MemoizeIter`
+then we made this method synchronized to guarantee
+that just one resulting stream will get a new item
+from the source iterator.
+This implementation solves the requirement of
+concurrent iterations on the same data source.
 
 
 
@@ -372,3 +577,6 @@ first that is not used in none of the end queries.
   [8]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/Weather.java
   [9]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/Weather.java#L47
   [10]: https://docs.oracle.com/javase/8/docs/api/java/util/stream/package-summary.html#StreamOps
+  [11]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/MemoizeTest.java#L60
+  [12]: https://github.com/CCISEL/streams/blob/master/src/test/java/org/streams/test/MemoizeTest.java
+  [13]: https://github.com/CCISEL/streams/blob/master/src/main/java/org/streams/Replayer.java#L41
