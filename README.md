@@ -13,6 +13,7 @@ ways: ["Is there any way to reuse a Stream in java
 been operated upon or closed"][2], ["Java 8 Stream
 IllegalStateException"][3], and others.
 
+<!--
 First, these questions are biased because many
 programmers wrongly think on a `Stream` as an
 equivalent to `Iterable`. But an `Iterable` is just
@@ -21,36 +22,41 @@ a `Stream` is just a kind of iterator. So, the right
 comparison is between `Stream` and `Iterator` wherein
 both have the same restriction disallowing multiple
 traversals. 
+-->
 
-Second, if we want to traverse a `Stream<T>` multiple
+Hence, if we want to traverse a `Stream<T>` multiple
 times then either we have to: 1) redo the computation
 to generate the stream from the data source, or 2)
-store the intermediate result into a collection. 
+store the intermediate result into a collection.
+<!-- 
 The first approach is similar to what we do when we
 get an `Iterator` object from an `Iterable`. To that
 end, we might wrap the stream expression into a supplier
 (e.g. `Supplier<Stream<T>> source`) and call its method
 `get()` whenever we want a fresh stream chain
 (e.g. `source.get()`).
-
-However what happens if data comes from the network, or
+-->
+Yet, both options have drawbacks and none of
+them is best suited for all use cases. 
+Using the first approach, 
+what happens if data comes across the network, or
 from a file or database, or other external source?
 In this case, we must return to the data source again,
 which may have more overhead than storing the intermediate
-result into a collection. So for multiple traversals
+result into a collection. So, for multiple traversals
 on immutable data maybe the second solution is more
 advantageous.
 Yet, if we are only going to use the data once then we
 get an efficiency payback using this approach, because
 we did not have to store the data source in memory.
 
-So shortly, both options have drawbacks and none of
-them is best suited for all use cases. Here we will
-explore the limitations and advantages of each approach
-on data resulting from an HTTP request.
-We will incrementally combine these solutions:
+Here we will explore a third alternative which memoizes items
+on-demand only when they are accessed by a traversal.
+We analyze the limitations and advantages of each approach
+on data resulting from an HTTP request and will
+incrementally combine these solutions:
 1. [using a `Supplier<Stream<…>>`](#approach-1----supplierstream)
-2. [memoizing the resulting stream into a collection](#approach-2----memoize-to-a-collection)
+2. [memoizing the entire stream into a collection](#approach-2----memoize-to-a-collection)
 to avoid multiple roundtrips to data source
 3. [memoizing and replaying items on demand](#approach-3----memoize-and-replay-on-demand)
 into and from an internal buffer.
@@ -587,7 +593,7 @@ in an intermediate collection.
 
 Reactive Streams implementations, such as [RxJava][14] or
 [Reactor][15], provide similar feature to that one
-proposed in [third approach](https://github.com/CCISEL/streams/tree/how_to_replay_java_streams#approach-3----memoize-and-replay- on-demand).
+proposed in [third approach](https://github.com/CCISEL/streams/tree/how_to_replay_java_streams#approach-3----memoize-and-replay-on-demand).
 Thus, if using `Stream` is not a requirement, then with
 reactor core we can simply convert the `Supplier<Stream<T>>`
 to a `Flux<T>`, which already provides the utility
