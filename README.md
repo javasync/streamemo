@@ -13,3 +13,13 @@ Need to use your streams over and over again? Let's cover three different
 approaches, their benefits, and their pitfalls when recycling Java streams.
 
 Read more here https://dzone.com/articles/how-to-replay-java-streams
+
+## Usage
+
+```java
+Random rnd = new Random();
+Supplier<Stream<String>> nrs = () -> generate(() -> rnd.nextInt(99)).map(Object::toString);
+Supplier<Stream<String>> nrsReplay = Replayer.replay(nrs);
+nrsReplay.get().limit(11.forEach(out::println);
+nrsReplay.get().limit(11.forEach(out::println); // Print the same previous numbers
+```
