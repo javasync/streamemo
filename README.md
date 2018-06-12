@@ -1,5 +1,10 @@
 # streams
 
+[![Build Status](https://sonarcloud.io/api/project_badges/measure?project=com.github.javasync%3Astreamemo&metric=alert_status)](https://sonarcloud.io/dashboard?id=com.github.javasync%3Astreamemo)
+[![Maven Central Version](https://img.shields.io/maven-central/v/com.github.javasync/streamemo.svg)](https://search.maven.org/#search%7Cga%7C1%7Ca%3A%22streamemo%22)
+[![Coverage Status](https://sonarcloud.io/api/project_badges/measure?project=com.github.javasync%3Astreamemo&metric=coverage)](https://sonarcloud.io/component_measures?id=com.github.javasync%3Astreamemo&metric=Coverage)
+
+
 Java streams utility methods for memoization
 
 ## How to replay Java streams?
