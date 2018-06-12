@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-package org.streams.test;
+package org.javasync.streams.test;
 
 import org.asynchttpclient.AsyncHttpClient;
 import org.asynchttpclient.Response;
