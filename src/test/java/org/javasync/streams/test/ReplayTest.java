@@ -22,9 +22,9 @@
  * SOFTWARE.
  */
 
-package org.streams.test;
+package org.javasync.streams.test;
 
-import org.streams.Replayer;
+import org.javasync.streams.Replayer;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -41,7 +41,7 @@ import static java.lang.System.out;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Stream.*;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.streams.Replayer.replay;
+import static org.javasync.streams.Replayer.replay;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ReplayTest {
@@ -50,7 +50,7 @@ public class ReplayTest {
     @SuppressWarnings("Duplicates")
     public void testConcurrentIteratorsOnMemoizedStream() {
         Random rnd = new Random();
-        Supplier<Stream<Integer>> nrs = replay(IntStream.range(1, 10).boxed());
+        Supplier<Stream<Integer>> nrs = Replayer.replay(IntStream.range(1, 10).boxed());
         Spliterator<Integer> iter1 = nrs.get().spliterator();
         iter1.tryAdvance(out::println);
         iter1.tryAdvance(out::println);
@@ -112,7 +112,7 @@ public class ReplayTest {
     public void testIntersectionInStreams() {
         Random rnd = new Random();
         Stream<Integer> nrs1 = rnd.ints(1, 20).boxed().limit(10);
-        Supplier<Stream<Integer>> nrs2 = replay(rnd.ints(1, 20).boxed().limit(10));
+        Supplier<Stream<Integer>> nrs2 = Replayer.replay(rnd.ints(1, 20).boxed().limit(10));
         nrs1
                 .filter(n1 -> nrs2.get().anyMatch(n1::equals))
                 .distinct()
@@ -123,14 +123,14 @@ public class ReplayTest {
     public void testLongStream() {
         assertThrows(IllegalStateException.class, () -> {
             long size = ((long) Integer.MAX_VALUE) + 10;
-            Supplier<Stream<Long>> nrs = replay(LongStream.range(0, size).boxed());
+            Supplier<Stream<Long>> nrs = Replayer.replay(LongStream.range(0, size).boxed());
             assertEquals(size, nrs.get().count());
         });
     }
     @Test
     public void testParallel() {
         Random rnd = new Random();
-        Supplier<Stream<Integer>> nrs = replay(rnd.ints(1, 1024).boxed().limit(1024*1024*8));
+        Supplier<Stream<Integer>> nrs = Replayer.replay(rnd.ints(1, 1024).boxed().limit(1024*1024*8));
         assertEquals(1024*1024*8, nrs.get().count());
         assertEquals(1023, (int) nrs
                 .get()

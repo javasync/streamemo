@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-package org.streams.test;
+package org.javasync.streams.test;
 
 import org.asynchttpclient.Response;
 import org.junit.jupiter.api.Test;

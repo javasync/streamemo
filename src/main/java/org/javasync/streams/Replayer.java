@@ -22,7 +22,7 @@
  * SOFTWARE.
  */
 
-package org.streams;
+package org.javasync.streams;
 
 import java.util.ArrayList;
 import java.util.Comparator;
