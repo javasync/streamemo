@@ -18,8 +18,36 @@ Read more here https://dzone.com/articles/how-to-replay-java-streams
 
 ```java
 Random rnd = new Random();
-Supplier<Stream<String>> nrs = () -> generate(() -> rnd.nextInt(99)).map(Object::toString);
-Supplier<Stream<String>> nrsReplay = Replayer.replay(nrs);
-nrsReplay.get().limit(11).forEach(out::println);
-nrsReplay.get().limit(11)..forEach(out::println); // Print the same previous numbers
+Stream<Integer> nrs = Stream.generate(() -> rnd.nextInt(99));
+Supplier<Stream<Integer>> nrsSrc = Replayer.replay(nrs);
+
+nrsSrc.get().limit(11).map(n -> n + ",").forEach(out::print); // e.g. 88,18,78,75,98,68,15,14,25,54,22,
+out.println();
+nrsSrc.get().limit(11).map(n -> n + ",").forEach(out::print); // Print the same previous numbers
+```
+
+Note that you cannot achieve this result with an intermediate 
+collection because `nrs` is an infinite stream.
+Thus trying to collect `nrs` incurs in an infinite loop.
+Only on-demand memoization like `replay()` achieves this approach. 
+
+## Installation
+
+First, in order to include it to your Maven project,
+simply add this dependency:
+
+```xml
+<dependency>
+    <groupId>com.github.javasync</groupId>
+    <artifactId>streamemo</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
+To add a dependency using Gradle:
+
+```
+dependencies {
+  compile 'com.github.javasync:streamemo:1.0.0'
+}
 ```

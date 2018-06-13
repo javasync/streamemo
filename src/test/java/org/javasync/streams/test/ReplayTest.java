@@ -61,6 +61,17 @@ public class ReplayTest {
     }
 
     @Test
+    public void testReplayInfiniteRandomStream() {
+        Random rnd = new Random();
+        Stream<Integer> nrs = Stream.generate(() -> rnd.nextInt(99));
+        Supplier<Stream<Integer>> nrsSrc = Replayer.replay(nrs);
+
+        nrsSrc.get().limit(11).map(n -> n + ",").forEach(out::print); // e.g. 88,18,78,75,98,68,15,14,25,54,22,
+        out.println();
+        nrsSrc.get().limit(11).map(n -> n + ",").forEach(out::print); // Print the same previous numbers
+    }
+
+    @Test
     public void testPrintInfiniteRandomStream() {
         Random rnd = new Random();
         Supplier<Stream<String>> nrs = () -> generate(() -> rnd.nextInt(99)).map(Object::toString);
