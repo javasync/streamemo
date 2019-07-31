@@ -48,7 +48,8 @@ public class Replayer {
             // MemoizeIter starts on index 0 and reads data from srcIter or
             // from an internal mem replay Recorder.
             Spliterator<T> iter = rec.memIterator();
-            return stream(iter, false);
+            return stream(iter, false)
+                .onClose(() -> dataSrc.get().close());
         };
     }
 
