@@ -38,7 +38,7 @@ import java.util.stream.Stream;
 import static org.asynchttpclient.Dsl.asyncHttpClient;
 
 public class Weather{
-    static final String KEY = "54a4f43fc39c435fa2c143536183004";
+    static final String KEY = "e841239881974af5b1480345192207";
     static final String HOST = "http://api.worldweatheronline.com/";
     static final String PATH = HOST + "premium/v1/past-weather.ashx?q=%s,%s&date=%s&enddate=%s&tp=24&format=csv&key=%s";
     static final Pattern NEWLINE = Pattern.compile("\\n");
