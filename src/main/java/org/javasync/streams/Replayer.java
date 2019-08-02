@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Spliterator;
 import java.util.Spliterators;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
@@ -44,12 +45,17 @@ public class Replayer {
 
     public static <T> Supplier<Stream<T>> replay(Supplier<Stream<T>> dataSrc) {
         final Recorder<T> rec = new Recorder<>(dataSrc);
+        final AtomicBoolean isClosed = new AtomicBoolean(false);
         return () -> {
             // MemoizeIter starts on index 0 and reads data from srcIter or
             // from an internal mem replay Recorder.
             Spliterator<T> iter = rec.memIterator();
             return stream(iter, false)
-                .onClose(() -> dataSrc.get().close());
+					.onClose(() -> {
+						if (isClosed.compareAndSet(false, true)) {
+							dataSrc.get().close();
+						}
+					});
         };
     }
 
