@@ -53,14 +53,15 @@ public class Replayer {
             return stream(iter, false)
 					.onClose(() -> {
 						if (isClosed.compareAndSet(false, true)) {
-							dataSrc.get().close();
+							rec.close();
 						}
 					});
         };
     }
 
-    static class Recorder<T> {
+    static class Recorder<T> implements AutoCloseable {
         private final Supplier<Stream<T>> dataSrc;
+        private Stream<T> srcStream;
         private Spliterator<T> srcIter;
         private long estimateSize;
         private boolean hasNext = true;
@@ -72,7 +73,8 @@ public class Replayer {
 
         synchronized Spliterator<T> getSrcIter() {
             if(srcIter == null) {
-                srcIter = dataSrc.get().spliterator();
+            	srcStream = dataSrc.get();
+                srcIter = srcStream.spliterator();
                 estimateSize = srcIter.estimateSize();
                 if((srcIter.characteristics() & Spliterator.SIZED) == 0)
                     mem = new ArrayList<>(); // Unknown size!!!
@@ -104,13 +106,13 @@ public class Replayer {
         public Spliterator<T> memIterator() {
             return !hasNext
                 ? new RandomAccessSpliterator() // Fast-path when all items are already saved in mem!
-                : new MemoizeIter();
+                : new MemoizeIter(getSrcIter());
         }
 
         class MemoizeIter extends Spliterators.AbstractSpliterator<T>  {
             int index = 0;
-            public MemoizeIter(){
-                super(estimateSize, getSrcIter().characteristics());
+            public MemoizeIter(Spliterator<T> inner){
+                super(estimateSize, inner.characteristics());
             }
             public boolean tryAdvance(Consumer<? super T> cons) {
                 return getOrAdvance(index++, cons);
@@ -201,5 +203,13 @@ public class Replayer {
                 return getSrcIter().getComparator();
             }
         }
+
+		@Override
+		public void close() {
+			if(srcStream != null)	{
+				srcStream.close();
+			}
+		}
+
     }
 }
