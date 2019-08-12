@@ -40,7 +40,7 @@ simply add this dependency:
 <dependency>
     <groupId>com.github.javasync</groupId>
     <artifactId>streamemo</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 </dependency>
 ```
 
@@ -51,3 +51,16 @@ dependencies {
   compile 'com.github.javasync:streamemo:1.0.0'
 }
 ```
+
+## Changelog
+
+### 1.0.1 (August, 2019)
+
+Add the ability to close the original stream.
+Now the the `onClose()` method of a stream from the `Supplier.get()`
+will trigger a call to the original Stream's onClose() method. 
+Contribution from shollander issue #2. 
+
+### 1.0.0 (June, 2018)
+
+First release according to the article "How to Reuse Java Streams" published on DZone at Jun. 12, 18
