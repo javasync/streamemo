@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.github.javasync</groupId>
     <artifactId>streamemo</artifactId>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.0.1</version>
     <packaging>jar</packaging>
     <name>
         Java streams utility methods for memoization.
@@ -30,7 +30,7 @@
         <connection>scm:git:git@github.com:javasync/streamemo.git</connection>
         <developerConnection>scm:git:git@github.com:javasync/streamemo.git</developerConnection>
         <url>https://github.com/javasync/streamemo.git</url>
-        <tag>HEAD</tag>
+        <tag>streamemo-1.0.1</tag>
     </scm>
     <distributionManagement>
         <snapshotRepository>
