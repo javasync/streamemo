@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.Spliterator;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -40,8 +41,8 @@ import java.util.stream.Stream;
 import static java.lang.System.out;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Stream.*;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.javasync.streams.Replayer.replay;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ReplayTest {
@@ -149,5 +150,45 @@ public class ReplayTest {
                 .max(Integer::compareTo)
                 .get());
 
+    }
+    @Test
+    public void testOnClose() {
+    	final AtomicInteger closeCounter = new AtomicInteger();
+    	final Stream<Long> originalStream = LongStream.range(1, 5).boxed()
+    			.onClose(() -> closeCounter.getAndIncrement());
+    	Supplier<Stream<Long>> replayer = Replayer.replay(originalStream);
+    	try(Stream<Long> s = replayer.get()) {
+    		Long[] numbers = s.toArray(Long[]::new);
+    		assertArrayEquals(new Long[] {1L, 2L, 3L, 4L}, numbers);
+    	}
+    	assertEquals(1, closeCounter.get());
+    }
+    @Test
+    public void testOnCloseWithSupplier() {
+    	final List<AtomicInteger> closeCounter = new ArrayList<>();
+    	final Supplier<Stream<Long>> originalStream = () -> {
+            Stream<Long> src = LongStream.range(1, 5).boxed();
+            AtomicInteger c = new AtomicInteger();
+            closeCounter.add(c);
+            src.onClose(() -> c.getAndIncrement());
+            return src;
+    	};
+
+    	Supplier<Stream<Long>> replayer = Replayer.replay(originalStream);
+    	// first stream
+    	try(Stream<Long> s = replayer.get()) {
+    		Long[] numbers = s.toArray(Long[]::new);
+    		assertArrayEquals(new Long[] {1L, 2L, 3L, 4L}, numbers);
+    	}
+    	assertEquals(1, closeCounter.size());
+        closeCounter.forEach(c -> assertEquals(1, c.get()));
+        
+        // replay stream
+        try(Stream<Long> s = replayer.get()) {
+        	Long[] numbers = s.toArray(Long[]::new);
+    		assertArrayEquals(new Long[] {1L, 2L, 3L, 4L}, numbers);
+    	}
+    	assertEquals(1, closeCounter.size());
+        closeCounter.forEach(c -> assertEquals(1, c.get()));
     }
 }
